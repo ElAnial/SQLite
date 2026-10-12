@@ -11,28 +11,42 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SQLite">
+
+        <!-- Actividad de Login (Punto de entrada / Launcher) -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LoginActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Dashboard Principal -->
         <activity
-            android:name=".Editar"
-            android:exported="true"
+            android:name=".MainActivity"
+            android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Módulo de Productos e Inventario -->
         <activity
-            android:name=".Leer"
-            android:exported="true"
+            android:name=".ProductosActivity"
+            android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Detalle, Edición y Registro de Productos -->
         <activity
-            android:name=".ViewActivity"
-            android:exported="true"
+            android:name=".EditarProductoActivity"
+            android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Módulo de Categorías -->
+        <activity
+            android:name=".CategoriasActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
     </application>
 
 </manifest>

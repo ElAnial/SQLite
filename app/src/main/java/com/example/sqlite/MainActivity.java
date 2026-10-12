@@ -1,85 +1,107 @@
 package com.example.sqlite;
-import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Intent;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
+
+import java.util.HashMap;
 
 public class MainActivity extends AppCompatActivity {
 
-    // 🔹 Declaración de los campos de texto y botones
-    private EditText txtNombre, txtApellido, txtEdad;
-    private Button btnGuardar, btnVer;
+    private SessionManager session;
+    private DBHelper dbHelper;
+
+    private TextView tvUsuarioNombre, tvUsuarioRol, tvTotalProductos, tvStockBajoCount;
+    private MaterialButton btnCerrarSesion;
+    private MaterialCardView cardProductos, cardCategorias;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main); // Carga el diseño XML principal de la app
 
-        // Se enlazan los elementos del XML con las variables del código
-        txtNombre = findViewById(R.id.txtNombre);
-        txtApellido = findViewById(R.id.txtApellido);
-        txtEdad = findViewById(R.id.txtEdad);
-        btnGuardar = findViewById(R.id.btnGuardar);
-        btnVer = findViewById(R.id.btnVer);
+        session = new SessionManager(this);
 
-        //  Acción del botón "Guardar" — inserta un registro en la base de datos
-        btnGuardar.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Obtiene los valores escritos por el usuario
-                String nombre = txtNombre.getText().toString().trim();
-                String apellido = txtApellido.getText().toString().trim();
-                String edad = txtEdad.getText().toString().trim();
+        // Control de Sesión Inicial (CU-01)
+        if (!session.isLoggedIn()) {
+            irALogin();
+            return;
+        }
 
-                // Verifica que todos los campos estén llenos antes de guardar
-                if (nombre.isEmpty() || apellido.isEmpty() || edad.isEmpty()) {
-                    Toast.makeText(MainActivity.this, "Por favor complete todos los campos.", Toast.LENGTH_SHORT).show();
-                    return;
-                }
+        setContentView(R.layout.activity_main);
 
-                try {
-                    // 🔹 Se crea una instancia del DBHelper, que administra la base de datos SQLite
-                    DBHelper dbHelper = new DBHelper(MainActivity.this);
+        dbHelper = new DBHelper(this);
 
-                    // 🔹 Se obtiene una base de datos en modo escritura
-                    SQLiteDatabase db = dbHelper.getWritableDatabase();
+        tvUsuarioNombre = findViewById(R.id.tvUsuarioNombre);
+        tvUsuarioRol = findViewById(R.id.tvUsuarioRol);
+        tvTotalProductos = findViewById(R.id.tvTotalProductos);
+        tvStockBajoCount = findViewById(R.id.tvStockBajoCount);
+        btnCerrarSesion = findViewById(R.id.btnCerrarSesion);
+        cardProductos = findViewById(R.id.cardProductos);
+        cardCategorias = findViewById(R.id.cardCategorias);
 
-                    // 🔹 Sentencia SQL parametrizada (segura contra inyección de código)
-                    db.execSQL("INSERT INTO persona (nombre, apellido, edad) VALUES (?, ?, ?)",
-                            new Object[]{nombre, apellido, Integer.parseInt(edad)});
+        // Mostrar datos de la sesión actual
+        HashMap<String, String> userDetails = session.getUserDetails();
+        String nombre = userDetails.get(SessionManager.KEY_FULL_NAME);
+        String rol = userDetails.get(SessionManager.KEY_ROLE_NAME);
 
-                    // 🔹 Se cierra la conexión después de insertar
-                    db.close();
+        tvUsuarioNombre.setText("Bienvenido, " + nombre);
+        tvUsuarioRol.setText("Rol: " + rol);
 
-                    // Muestra confirmación al usuario
-                    Toast.makeText(MainActivity.this, "Registro guardado correctamente.", Toast.LENGTH_SHORT).show();
-
-                    // Limpia los campos del formulario para ingresar un nuevo registro
-                    txtNombre.setText("");
-                    txtApellido.setText("");
-                    txtEdad.setText("");
-                    txtNombre.requestFocus();
-
-                } catch (Exception e) {
-                    // 🔹 Captura y muestra cualquier error durante la operación
-                    Toast.makeText(MainActivity.this, "Error al guardar: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                }
-            }
+        // Cierre de Sesión Seguro (CU-02)
+        btnCerrarSesion.setOnClickListener(v -> {
+            session.logoutUser();
+            Toast.makeText(MainActivity.this, "Sesión cerrada correctamente", Toast.LENGTH_SHORT).show();
+            irALogin();
         });
 
-        //  Acción del botón "Ver" — abre la Activity que muestra los registros
-        btnVer.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // Crea un Intent explícito para abrir la Activity Leer
-                Intent intent = new Intent(MainActivity.this, Leer.class);
-                startActivity(intent); // Lanza la nueva pantalla
+        // Eventos de Navegación
+        cardProductos.setOnClickListener(v -> startActivity(new Intent(MainActivity.this, ProductosActivity.class)));
+        cardCategorias.setOnClickListener(v -> startActivity(new Intent(MainActivity.this, CategoriasActivity.class)));
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (session.isLoggedIn()) {
+            actualizarMetricas();
+        }
+    }
+
+    private void actualizarMetricas() {
+        SQLiteDatabase db = dbHelper.getReadableDatabase();
+
+        int totalProductos = 0;
+        int stockBajoCount = 0;
+
+        // Total de productos activos
+        try (Cursor cursorTotal = db.rawQuery("SELECT COUNT(*) FROM producto WHERE activo = 1", null)) {
+            if (cursorTotal.moveToFirst()) {
+                totalProductos = cursorTotal.getInt(0);
             }
-        });
+        } catch (Exception ignored) {}
+
+        // Productos con stock actual <= stock minimo
+        try (Cursor cursorBajo = db.rawQuery("SELECT COUNT(*) FROM producto WHERE activo = 1 AND stock_actual <= stock_minimo", null)) {
+            if (cursorBajo.moveToFirst()) {
+                stockBajoCount = cursorBajo.getInt(0);
+            }
+        } catch (Exception ignored) {}
+
+        tvTotalProductos.setText(String.valueOf(totalProductos));
+        tvStockBajoCount.setText(String.valueOf(stockBajoCount));
+    }
+
+    private void irALogin() {
+        Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+        startActivity(intent);
+        finish();
     }
 }
